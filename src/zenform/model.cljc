@@ -298,16 +298,16 @@ after that merge in to one big error"
                   (inc (first (apply max-key key coll))))
             sch (:item node)
             v (*form sch [] (or v {}))]
-        (*on-value-set-loop
-         (*set-value form form-path (conj path idx) v (:type node))
-         form-path #_(get-in form (get-node-path path))
-         path))
+        (-> (*set-value form form-path (conj path idx) v (:type node))
+            (*on-value-set-loop form-path path)))
       form)))
 
-(defn remove-collection-item [form path idx]
+(defn remove-collection-item [form path idx & [form-path]]
   (let [node-path (get-node-path path)]
+
     (if (= :collection (get-in form (conj node-path :type)))
-      (*on-value-set-loop (update-in form (conj node-path :value) dissoc idx) node-path path)
+      (-> (update-in form (conj node-path :value) dissoc idx)
+          (*on-value-set-loop form-path path))
       form)))
 
 (defn set-collection [form path v]
@@ -324,7 +324,7 @@ after that merge in to one big error"
 (rf/reg-event-db
  :zf/remove-collection-item
  (fn [db [_ form-path path idx]]
-   (update-in db form-path (fn [form] (remove-collection-item form path idx)))))
+   (update-in db form-path (fn [form] (remove-collection-item form path idx form-path)))))
 
 (rf/reg-event-db
  :zf/set-collection
