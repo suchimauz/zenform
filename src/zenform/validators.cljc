@@ -1,7 +1,71 @@
 (ns zenform.validators
   (:require [clojure.string :as str]))
 
-(defmulti validate (fn [cfg & _] (:type cfg)))
+(declare validate*)
+
+(defmulti validate #'validate*) ;Like this so function won't be cached and could be redefed on the fly.
+
+(defn get-arrities
+  "Returns hash-set of numbers of arrities of a function.
+   
+   For variadic arities returns (+ 1 number-of-fixed-arguments)"
+  [fn]
+  #?(:clj  (->> fn class
+                .getDeclaredMethods
+                (map #(-> %
+                          .getParameterTypes
+                          alength))
+                set)
+     :cljs (if (->> fn js-keys count
+                    ((partial = 0)))
+             (hash-set (.-length fn))
+             (cond-> (->> fn js-keys
+                          (map #(js/parseInt (re-find #"\d*$" %)))
+                          (remove js/isNaN)
+                          set)
+               (->> fn js-keys
+                    (some (partial re-find #"variadic")))
+               ((partial cons (+ 1 (.-cljs$lang$maxFixedArity fn))))
+
+               :always
+               set))))
+
+#_(defn variadic-multimethod
+  "Allows for creation of variadic multimethods.
+   
+   Sideeffecty: defs method for multi called `:regress` which is used to reduce number of params.
+   
+   Never used."
+  [multi method params]
+  (when (nil? (get-method multi :regress))
+    (defmethod multi :regress
+      [method & params]
+      (apply multi method (butlast params))))
+  (let [arrities (some->> method
+                          (get-method multi)
+                          get-arrities)]
+    (cond
+      (nil? (get-method multi method))
+      (if (get-method multi :default)
+        :default
+        method)
+
+      (arrities (count (conj params method)))
+      method
+
+      (nil? params)
+      (throw (#?(:clj  Exception.
+                 :cljs js/Error.) "Can't find method with valid arity"))
+
+      :else
+      :regress)))
+
+(defn validate*
+  "Actual params list: `[cfg value path]`
+   
+   `path` not always present."
+  [cfg & params]
+  (:type cfg))
 
 (defmethod validate
   :min-length

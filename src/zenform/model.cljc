@@ -71,10 +71,14 @@
 
 (defn validate-node [node v & [pth]]
   (reduce (fn [errs [k cfg]]
-            (if-let [msg (validators/validate
-                          (merge {:type k, :node node} cfg)
-                          v
-                          pth)]
+            (if-let [msg (let [arrity (some->> k
+                                               (get-method validators/validate)
+                                               validators/get-arrities
+                                               (apply max)
+                                               (#(- % 1)))]
+                           (apply validators/validate
+                                  (merge {:type k, :node node} cfg)
+                                  (take arrity [v pth])))]
               (assoc errs k msg)
               errs))
           nil (:validators node)))
