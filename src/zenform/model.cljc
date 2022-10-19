@@ -69,13 +69,15 @@
    (*get-value form)))
 
 
-(defn validate-node [node v]
+(defn validate-node [node v & [pth]]
   (reduce (fn [errs [k cfg]]
             (if-let [msg (validators/validate
                           (merge {:type k, :node node} cfg)
-                          v)]
+                          v
+                          pth)]
               (assoc errs k msg)
-              errs)) nil (:validators node)))
+              errs))
+          nil (:validators node)))
 
 
 (defn fire-on-change [form-path form &[path]]
@@ -238,12 +240,12 @@ after that merge in to one big error"
                         (and (not (nil? v)) (= tp :collection)) (update :value conj v)
                         (and (not (nil? v)) (= tp :form))       (assoc-in [:value idx] v))))
                   {:value   (if (= tp :form) {} []) :errors  {} :form node} v)
-          errs (validate-node node v)]
+          errs (validate-node node v pth)]
       (cond-> (update res :value (fn [x] (when-not (empty? x) x)))
         errs (assoc-in [:errors []] errs)
         errs (assoc-in [:form :errors] errs)))
 
-    (let [errs (validate-node node v)
+    (let [errs (validate-node node v pth)
           node (cond-> (assoc node :touched true) errs (assoc :errors errs))]
       (cond-> {:value v :form node }
         errs (assoc :errors {[] errs})))))

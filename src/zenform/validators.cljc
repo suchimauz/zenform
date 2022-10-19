@@ -1,8 +1,7 @@
 (ns zenform.validators
   (:require [clojure.string :as str]))
 
-
-(defmulti validate (fn [cfg value] (:type cfg)))
+(defmulti validate (fn [cfg & _] (:type cfg)))
 
 (defmethod validate
   :min-length
