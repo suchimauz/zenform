@@ -78,7 +78,9 @@
                                                (#(- % 1)))]
                            (apply validators/validate
                                   (merge {:type k, :node node} cfg)
-                                  (take arrity [v pth])))]
+                                  (if arrity
+                                    (take arrity [v pth])
+                                    [v pth])))]
               (assoc errs k msg)
               errs))
           nil (:validators node)))
