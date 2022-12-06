@@ -3,7 +3,9 @@
 
 (declare validate*)
 
-(defmulti validate #'validate*) ;Like this so function won't be cached and could be redefed on the fly.
+(defmulti validate
+  {:arglists '([cfg value & [path]])}
+  #'validate*)
 
 (defn get-arrities
   "Returns hash-set of numbers of arrities of a function.
@@ -61,10 +63,7 @@
       :regress)))
 
 (defn validate*
-  "Actual params list: `[cfg value path]`
-   
-   `path` not always present."
-  [cfg & params]
+  [cfg & _]
   (:type cfg))
 
 (defmethod validate
