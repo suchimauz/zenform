@@ -99,6 +99,10 @@
             (and (sequential? v) (empty? v)))
     (or msg "Should not be blank")))
 
+(defmethod validate :pseudo
+  [& _]
+  nil)
+
 (def email-regex #".+?\@.+?\..+")
 
 (defmethod validate
