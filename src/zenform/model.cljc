@@ -69,7 +69,7 @@
    (*get-value form)))
 
 
-(defn validate-node [node v & [pth]]
+(defn validate-node [node value & [path]]
   (reduce (fn [errs [k cfg]]
             (if-let [msg (let [arrity (some->> k
                                                (get-method validators/validate)
@@ -79,27 +79,29 @@
                            (apply validators/validate
                                   (merge {:type k, :node node} cfg)
                                   (if arrity
-                                    (take arrity [v pth])
-                                    [v pth])))]
+                                    (take arrity [value path])
+                                    [value path])))]
               (assoc errs k msg)
               errs))
           nil (:validators node)))
 
 
-(defn fire-on-change [form-path form &[path]]
+(defn fire-on-change [form-path form & [path]]
   (when-let [node (get-in form (or path []))]
     (when-let [change (:on-change node)]
-      (let [ppth (vec (remove #(= :value %) path))]
+      (let [path' (vec (remove #(= :value %) path))]
         (doall
          (for [[k args] change]
-           (rf/dispatch [k (:value node) form-path ppth args])))))
-    (if (map? node)
-      (reduce-kv (fn [path k v]
+           (rf/dispatch [k (:value node) form-path path' args])))))
+    (when (map? node)
+      (reduce-kv (fn [path k _]
                    (fire-on-change form-path form (conj path k))
                    path)
-                 (if (or (= :collection (:type node)) (= :form (:type node)))
+                 (when (or (= :collection (:type node))
+                           (= :form (:type node)))
                    (conj (or path []) :value))
-                 (if (or (= :collection (:type node)) (= :form (:type node)))
+                 (when (or (= :collection (:type node))
+                           (= :form (:type node)))
                    (:value node))))))
 
 (rf/reg-event-fx
@@ -108,8 +110,15 @@
    (fire-on-change form-path (get-in db form-path))
    {}))
 
+(defn *set-value [form form-path path value & [type]]
+  (let [value' (if (and (string? value) (str/blank? value)) nil value)
+        path'  (if (= type :collection)
+                 (get-node-path path)
+                 (get-value-path path))]
+    (assoc-in form path' value')))
+
 (defn *on-value-set [node form-path path]
-  (let [v (*get-value node)
+  (let [v    (*get-value node)
         errs (validate-node node v)]
     (doall
      (for [[k & args] (:on-change node)]
@@ -118,27 +127,27 @@
       errs (assoc :errors errs))))
 
 (defn *on-value-set-loop [form form-path path]
-  (loop [form form path path]
+  (loop [form form
+         path path]
     (if (nil? path)
       (*on-value-set form form-path path)
       (recur (update-in form (get-node-path path) #(*on-value-set % form-path path))
              (butlast path)))))
 
-(defn *set-value [form form-path path value & [type]]
-  (let [value (if (and (string? value) (str/blank? value)) nil value)
-        form (assoc-in form (if (= type :collection)
-                              (get-node-path path)
-                              (get-value-path path)) value)
-        ] form))
-
 (defn set-value
   "Put value for specific path; run validations"
   [form form-path path value & [type]]
-  (let [value (if (and (string? value) (str/blank? value)) nil value)
-        form (assoc-in form (if (= type :collection)
-                              (get-node-path path)
-                              (get-value-path path)) value)]
-    (*on-value-set-loop (*set-value form form-path path value type) form-path path )))
+  (let [value' (if (and (string? value)
+                        (str/blank? value))
+                 nil
+                 value)
+        path' (if (= type :collection)
+                (get-node-path path)
+                (get-value-path path))
+        form' (assoc-in form path' value')]
+    (-> form'
+        (*set-value form-path path value' type)
+        (*on-value-set-loop form-path path))))
 
 #_(defn set-value
   "Put value for specific path; run validations"
