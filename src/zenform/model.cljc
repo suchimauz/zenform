@@ -278,6 +278,18 @@ after that merge in to one big error"
  (fn [db [_ form-path path v]]
    (update-in db form-path (fn [form] (set-value form form-path path v)))))
 
+(rf/reg-event-db
+ :zf/set-values
+ (fn [db [_ form-path path vs]]
+   (update-in db form-path (fn [form]
+                             (reduce-kv
+                              (fn [acc k v]
+                                (assoc-in acc
+                                          (get-value-path (conj path k))
+                                          v))
+                              form
+                              vs)))))
+
 (rf/reg-sub
  :zf/collection-indexes
  (fn [db [_ form-path path]]
