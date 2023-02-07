@@ -281,14 +281,15 @@ after that merge in to one big error"
 (rf/reg-event-db
  :zf/set-values
  (fn [db [_ form-path path vs]]
-   (update-in db form-path (fn [form]
-                             (reduce-kv
-                              (fn [acc k v]
-                                (assoc-in acc
-                                          (get-value-path (conj path k))
-                                          v))
-                              form
-                              vs)))))
+   (update-in db form-path
+              (fn [form]
+                (reduce-kv
+                 (fn [acc k v]
+                   (assoc-in acc
+                             (get-value-path (into path (cond-> k (keyword? k) (vector))))
+                             v))
+                 form
+                 vs)))))
 
 (rf/reg-sub
  :zf/collection-indexes
