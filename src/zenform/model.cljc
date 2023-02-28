@@ -279,6 +279,12 @@ after that merge in to one big error"
    (update-in db form-path (fn [form] (set-value form form-path path v)))))
 
 (rf/reg-event-db
+ :zf/clear-value
+ (fn [db [_ form-path path]]
+   (let [path* (get-value-path path)]
+     (assoc-in db (into form-path path*) nil))))
+
+(rf/reg-event-db
  :zf/set-values
  (fn [db [_ form-path path vs]]
    (update-in db form-path
@@ -378,3 +384,10 @@ after that merge in to one big error"
    {:db (update-in db
                    (get-full-path form-path path)
                    #(merge % value))}))
+
+(rf/reg-event-fx
+ :zf/remove-validators
+ (fn [{db :db} [_ form-path path]]
+   {:db (update-in db
+                   (get-full-path form-path path)
+                   #(dissoc % :validators))}))
