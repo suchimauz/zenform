@@ -352,6 +352,14 @@ after that merge in to one big error"
       (set-value form path (*form node [] (or v {})) (:type node))
       form)))
 
+(defn set-collection-item
+  [form-data form-path path v]
+  (let [node   (get-in form-data (get-node-path (butlast path)))
+        schema (:item node)
+        value  (*form schema [] (or v {}))]
+    (-> (*set-value form-data form-path path value :collection)
+        (*on-value-set-loop form-path (butlast path)))))
+
 (rf/reg-event-db
  :zf/add-collection-item
  (fn [db [_ form-path path v]]
@@ -366,6 +374,11 @@ after that merge in to one big error"
  :zf/set-collection
  (fn [db [_ form-path path v]]
    (update-in db form-path (fn [form] (set-collection form path v)))))
+
+(rf/reg-event-db
+ :zf/set-collection-item
+ (fn [db [_ form-path path v]]
+   (update-in db form-path (fn [form-data] (set-collection-item form-data form-path path v)))))
 
 (rf/reg-sub
  :zf/collection
