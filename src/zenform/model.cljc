@@ -1,7 +1,10 @@
 (ns zenform.model
-  (:require [zenform.validators :as validators]
+  (:require [clojure.walk   :as walk]
             [clojure.string :as str]
-            [re-frame.core :as rf]))
+
+            [re-frame.core :as rf]
+
+            [zenform.validators :as validators]))
 
 (defn *form [{:keys [type default] :as sch} path val]
   (let [v (cond
@@ -166,11 +169,23 @@
 (defn raw-value
   "Return raw form value"
   [v]
-  (clojure.walk/prewalk
+  (walk/prewalk
    (fn [x]
      (if (and (map? x) (:value x))
        (:value x)
        x)) v))
+
+(defn indexed-value
+  "Return indexed value"
+  ([v]
+   (walk/prewalk
+    (fn [x]
+      (if (and (map? x) (contains? x :value))
+        (:value x)
+        x)) v))
+  ([v path]
+   (-> (indexed-value v)
+       (get-in path))))
 
 ;; this fn will fuck your brain
 ;; it evals all validators and collect errors
