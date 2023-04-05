@@ -340,6 +340,14 @@ after that merge in to one big error"
        (get-value form path)
        (get-value form)))))
 
+(rf/reg-sub
+ :zf/indexed-value
+ (fn [db [_ form-path path]]
+   (let [form (get-in db form-path)]
+     (if path
+       (indexed-value form path)
+       (indexed-value form)))))
+
 (defn add-collection-item [form form-path path v]
   (let [node (get-in form (get-node-path path))]
     (if (= :collection (:type node))
