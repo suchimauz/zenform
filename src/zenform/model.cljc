@@ -294,6 +294,15 @@ after that merge in to one big error"
    (update-in db form-path (fn [form] (set-value form form-path path v)))))
 
 (rf/reg-event-db
+ :zf/update-value
+ (fn [db [_ form-path path f]]
+   (update-in db form-path
+              (fn [form]
+                (let [v  (get-value form path)
+                      v' (f v)]
+                  (set-value form form-path path v'))))))
+
+(rf/reg-event-db
  :zf/clear-value
  (fn [db [_ form-path path]]
    (let [path* (get-value-path path)]
