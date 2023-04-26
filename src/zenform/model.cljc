@@ -315,9 +315,9 @@ after that merge in to one big error"
               (fn [form]
                 (reduce-kv
                  (fn [acc k v]
-                   (assoc-in acc
-                             (get-value-path (into path (cond-> k (keyword? k) (vector))))
-                             v))
+                   (set-value acc form-path
+                              (into path (cond-> k (keyword? k) (vector)))
+                              v))
                  form
                  vs)))))
 
