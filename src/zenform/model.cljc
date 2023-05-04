@@ -2,6 +2,7 @@
   (:require [clojure.walk   :as walk]
             [clojure.string :as str]
 
+            [re-frame.db   :as db]
             [re-frame.core :as rf]
 
             [zenform.validators :as validators]))
@@ -65,11 +66,20 @@
 
 
 (defn get-value
-  "Get value for specific path; if path not passed returns form value"
+  "Get value for specific path; if path not passed returns form value."
   ([form path]
    (*get-value (get-in form (get-node-path path))))
   ([form]
    (*get-value form)))
+
+(defn get-value!
+  "Get value for specific path; if path not passed returns form value.
+   
+   Side-effect: gets form from the `app-db` in turn bypassing the normal flow of data."
+  ([form-path path]
+   (get-value (get-in @db/app-db form-path) path))
+  ([form-path]
+   (get-value (get-in @db/app-db form-path))))
 
 
 (defn validate-node [node value & [path]]
