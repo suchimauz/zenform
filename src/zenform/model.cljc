@@ -132,7 +132,7 @@
 
 (defn *on-value-set [node form-path path]
   (let [v    (*get-value node)
-        errs (validate-node node v)]
+        errs (validate-node node v path)]
     (doall
      (for [[k & args] (:on-change node)]
        (rf/dispatch (apply vector k v form-path path args))))
