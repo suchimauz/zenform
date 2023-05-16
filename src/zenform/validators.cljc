@@ -93,11 +93,12 @@
 (defmethod validate
   :required
   [{msg :message} v]
-  (when (or (nil? v)
-            (and (string? v) (str/blank? v))
-            (and (map? v) (empty? v))
-            (and (sequential? v) (empty? v)))
-    (or msg "Should not be blank")))
+  (let [default-msg "Обязательное поле"]
+    (when (or (nil? v)
+              (and (string? v) (str/blank? v))
+              (and (map? v) (empty? v))
+              (and (sequential? v) (empty? v)))
+      (or msg default-msg))))
 
 (defmethod validate :pseudo
   [& _]
