@@ -298,19 +298,24 @@ after that merge in to one big error"
  (fn [db [_ form-path schema value]]
    (assoc-in db form-path (form schema value))))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/set-value
- (fn [db [_ form-path path v]]
-   (update-in db form-path (fn [form] (set-value form form-path path v)))))
+ (fn [{db :db} [_ form-path path v & [{:keys [success]}]]]
+   (cond-> {:db (update-in db form-path (fn [form]
+                                          (set-value form form-path path v)))}
+     success
+     (assoc :dispatch [(:event success) (:params success)]))))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/update-value
- (fn [db [_ form-path path f]]
-   (update-in db form-path
-              (fn [form]
-                (let [v  (get-value form path)
-                      v' (f v)]
-                  (set-value form form-path path v'))))))
+ (fn [{db :db} [_ form-path path f & [{:keys [success]}]]]
+   (cond-> {:db (update-in db form-path
+                           (fn [form]
+                             (let [v  (get-value form path)
+                                   v' (f v)]
+                               (set-value form form-path path v'))))}
+     success
+     (assoc :dispatch [(:event success) (:params success)]))))
 
 (rf/reg-event-db
  :zf/clear-value
