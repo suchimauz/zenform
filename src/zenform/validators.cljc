@@ -119,3 +119,20 @@
   (when v
     (when-not (re-matches rx v)
       (or msg (str "Should match " rx)))))
+
+(defmethod validate :or
+  [{:keys [node validators]} value path]
+  (reduce-kv (fn [_ k cfg*]
+               (let [cfg    (merge {:type k, :node node} cfg*)
+                     arrity (some->> k
+                                     (get-method validate)
+                                     get-arrities
+                                     (apply max)
+                                     (#(- % 1)))
+                     msg   (apply validate cfg
+                                  (if arrity
+                                    (take arrity [value path])
+                                    [value path]))]
+                 (if (nil? msg)
+                   (reduced nil) msg)))
+             nil validators))
