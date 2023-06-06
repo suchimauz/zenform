@@ -255,8 +255,9 @@ after that merge in to one big error"
    form
    errors ))
 
-(defn **eval-form [form]
-  "Collect form value, then validate whole form and collect errros"
+(defn **eval-form
+  "Collect form value, then validate whole form and collect errors"
+  [form]
   (let [value   (eval-node form)
         errors  (eval-errors value form [])
         form    (inject-errors errors form)]
@@ -264,31 +265,63 @@ after that merge in to one big error"
              :form form}
       errors (assoc :errors errors))))
 
-(defn *eval-form [{tp :type v :value :as node} & [pth]]
+(defn- *eval-form [{tp :type v :value :as node} & [pth]]
   (if (or (= tp :collection) (= tp :form))
     (let [{v :value :as res}
           (reduce (fn [res [idx n]]
                     (let [pth (conj (or pth []) idx)
-                          {v :value err :errors ch-node :form :as eval-res} (*eval-form n pth)
-                          res (if (empty? err) res
-                                  (update res :errors (fn [es]
-                                                        (reduce (fn [es [err-k err-v]]
-                                                                  (assoc es (into [idx] err-k) err-v))
-                                                                es err))))
-                          res (-> res (assoc-in [:form :value idx] ch-node))]
+                          {v :value err :errors files :files ch-node :form :as eval-res} (*eval-form n pth)]
                       (cond-> res
-                        (and (not (nil? v)) (= tp :collection)) (update :value conj v)
-                        (and (not (nil? v)) (= tp :form))       (assoc-in [:value idx] v))))
-                  {:value   (if (= tp :form) {} []) :errors  {} :form node} v)
-          errs (validate-node node v pth)]
-      (cond-> (update res :value (fn [x] (when-not (empty? x) x)))
-        errs (assoc-in [:errors []] errs)
-        errs (assoc-in [:form :errors] errs)))
+                        :always
+                        (assoc-in [:form :value idx] ch-node)
 
-    (let [errs (validate-node node v pth)
-          node (cond-> (assoc node :touched true) errs (assoc :errors errs))]
-      (cond-> {:value v :form node }
-        errs (assoc :errors {[] errs})))))
+                        (seq err)
+                        (update :errors (fn [es]
+                                              (reduce (fn [es [err-k err-v]]
+                                                        (assoc es (into [idx] err-k) err-v))
+                                                      es err)))
+
+                        (seq files)
+                        (update :files concat files)
+
+                        (and (not (nil? v)) (= tp :collection))
+                        (update :value conj v)
+
+                        (and (not (nil? v)) (= tp :form))
+                        (assoc-in [:value idx] v))))
+                  {:value  (if (= tp :form)
+                             {} [])
+                   :errors {}
+                   :form   node} v)
+          errs (validate-node node v pth)]
+      (cond-> res
+        :always
+        (update :value #(when-not (empty? %) %))
+
+        errs
+        (-> (assoc-in [:errors []] errs)
+            (assoc-in [:form :errors] errs))))
+
+    (let [errs  (validate-node node v pth)
+          files (when (sequential? v)
+                  (for [{:keys [file]} v
+                        :when file]
+                    file))
+          node (cond-> node
+                 :always
+                 (assoc :touched true)
+
+                 errs
+                 (assoc :errors errs))]
+      (cond-> {:value (cond-> v
+                        (map? v)
+                        (dissoc :file))
+               :form  node}
+        errs
+        (assoc :errors {[] errs})
+
+        files
+        (assoc :files files)))))
 
 (defn eval-form [form]
   (*eval-form form))
