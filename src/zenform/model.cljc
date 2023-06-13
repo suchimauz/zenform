@@ -175,6 +175,12 @@
         (recur (update-in form (get-node-path path) *on-value-set)
                (butlast path))))))
 
+(defn set-value!
+  "Careful!"
+  [form-path path value]
+  (swap! db/app-db update-in form-path (fn [form]
+                                         (set-value form form-path path value))))
+
 
 (defn raw-value
   "Return raw form value"
