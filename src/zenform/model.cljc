@@ -123,7 +123,7 @@
    (fire-on-change form-path (get-in db form-path))
    {}))
 
-(defn *set-value [form form-path path value & [type]]
+(defn *set-value [form _ path value & [type]]
   (let [value' (if (and (string? value) (str/blank? value)) nil value)
         path'  (if (= type :collection)
                  (get-node-path path)
@@ -148,7 +148,7 @@
              (butlast path)))))
 
 (defn set-value
-  "Put value for specific path; run validations"
+  "Put value for specific path; run validations."
   [form form-path path value & [type]]
   (let [value' (if (and (string? value)
                         (str/blank? value))
@@ -161,19 +161,6 @@
     (-> form'
         (*set-value form-path path value' type)
         (*on-value-set-loop form-path path))))
-
-#_(defn set-value
-  "Put value for specific path; run validations"
-  [form path value & [type]]
-  (let [value (if (and (string? value) (str/blank? value)) nil value)
-        form (assoc-in form (if (= type :collection)
-                              (get-node-path path)
-                              (get-value-path path)) value)]
-    (loop [form form path path]
-      (if (nil? path)
-        (*on-value-set form)
-        (recur (update-in form (get-node-path path) *on-value-set)
-               (butlast path))))))
 
 (defn set-value!
   "Careful!"
@@ -210,9 +197,10 @@
 
 (declare eval-errors)
 
-(defn aggregate-errors [form-value {node-value :value :as node} node-index]
-  "For nodes with type :form and :collection
-reduce by fields of items and collect all child errros"
+(defn aggregate-errors
+  "For nodes with type `:form` and `:collection`
+   reduce by fields of items and collect all child errors."
+  [form-value {node-value :value} node-index]
   (reduce-kv
    (fn [acc idx child-node]
      (let [node-path (conj node-index idx)
@@ -221,9 +209,10 @@ reduce by fields of items and collect all child errros"
    {}
    node-value))
 
-(defn eval-errors [form-value {node-type :type :as node} node-index]
+(defn eval-errors
   "Get all child errors if need, then validate node itself
-after that merge in to one big error"
+   after that merge in to one big error."
+  [form-value {node-type :type :as node} node-index]
   (let [child-errors (when (#{:collection :form} node-type)
                        (aggregate-errors form-value node node-index))
         node-errors (validate-node node (get-in form-value node-index))]
@@ -231,19 +220,19 @@ after that merge in to one big error"
       node-errors (assoc  node-index node-errors))))
 
 (declare **eval-form)
-(defn eval-form-node [{node-value :value :as node}]
+(defn eval-form-node [{node-value :value}]
   (reduce-kv
    (fn [acc field child-node]
-     (let [evalled-node (**eval-form child-node)]
-       (assoc acc field (:value evalled-node))))
+     (let [evaled-node (**eval-form child-node)]
+       (assoc acc field (:value evaled-node))))
    {}
    node-value))
 
-(defn eval-collection-node [{node-value :value :as node}]
+(defn eval-collection-node [{node-value :value}]
   (reduce-kv
-   (fn [acc index child-node]
-     (let [evalled-node (**eval-form child-node)]
-       (conj acc (:value evalled-node))))
+   (fn [acc _ child-node]
+     (let [evaled-node (**eval-form child-node)]
+       (conj acc (:value evaled-node))))
    []
    node-value))
 
@@ -276,7 +265,7 @@ after that merge in to one big error"
     (let [{v :value :as res}
           (reduce (fn [res [idx n]]
                     (let [pth (conj (or pth []) idx)
-                          {v :value err :errors files :files ch-node :form :as eval-res} (*eval-form n pth)]
+                          {v :value err :errors files :files ch-node :form} (*eval-form n pth)]
                       (cond-> res
                         :always
                         (assoc-in [:form :value idx] ch-node)
