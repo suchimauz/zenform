@@ -2,10 +2,19 @@
   (:require [clojure.walk   :as walk]
             [clojure.string :as str]
 
-            [re-frame.db   :as db]
-            [re-frame.core :as rf]
+            [re-frame.db    :as db]
+            [re-frame.core  :as rf]
+            [re-frame.utils :as rfu]
 
             [zenform.validators :as validators]))
+
+(def value-changed
+  (rf/->interceptor
+   {:id    ::value-changed
+    :after (fn [ctx]
+             (update-in ctx [:effects :db :zf/form] merge
+                        {:changed? true
+                         :saved?   false}))}))
 
 (defn *form [{:keys [type default] :as sch} path val]
   (let [v (cond
@@ -328,6 +337,7 @@
 
 (rf/reg-event-fx
  :zf/set-value
+ [value-changed]
  (fn [{db :db} [_ form-path path v & [{:keys [success]}]]]
    (cond-> {:db (update-in db form-path (fn [form]
                                           (set-value form form-path path v)))}
@@ -336,6 +346,7 @@
 
 (rf/reg-event-fx
  :zf/update-value
+ [value-changed]
  (fn [{db :db} [_ form-path path f & [{:keys [success]}]]]
    (cond-> {:db (update-in db form-path
                            (fn [form]
@@ -347,12 +358,14 @@
 
 (rf/reg-event-db
  :zf/clear-value
+ [value-changed]
  (fn [db [_ form-path path]]
    (let [path* (get-value-path path)]
      (assoc-in db (into form-path path*) nil))))
 
 (rf/reg-event-db
  :zf/set-values
+ [value-changed]
  (fn [db [_ form-path path vs]]
    (update-in db form-path
               (fn [form]
@@ -437,21 +450,25 @@
 
 (rf/reg-event-db
  :zf/add-collection-item
+ [value-changed]
  (fn [db [_ form-path path v]]
    (update-in db form-path (fn [form] (add-collection-item form form-path path v)))))
 
 (rf/reg-event-db
  :zf/remove-collection-item
+ [value-changed]
  (fn [db [_ form-path path idx]]
    (update-in db form-path (fn [form] (remove-collection-item form path idx form-path)))))
 
 (rf/reg-event-db
  :zf/set-collection
+ [value-changed]
  (fn [db [_ form-path path v]]
    (update-in db form-path (fn [form] (set-collection form path v)))))
 
 (rf/reg-event-db
  :zf/set-collection-item
+ [value-changed]
  (fn [db [_ form-path path v]]
    (update-in db form-path (fn [form-data] (set-collection-item form-data form-path path v)))))
 
@@ -479,3 +496,32 @@
    {:db (update-in db
                    (get-full-path form-path path)
                    #(dissoc % :validators))}))
+
+(rf/reg-event-db
+ ::reset
+ (fn [db _]
+   (rfu/dissoc-in db [:zf/form])))
+
+
+(def before-transition
+  (rf/->interceptor
+   {:id     :before-transition
+    :before (fn [ctx]
+              (let [{:keys [changed? saved? data-loss]} (get-in ctx [:coeffects :db :zf/form])]
+                (cond-> ctx
+                  (and changed? (not saved?) (not (#{:ignored} data-loss)))
+                  (assoc-in [:coeffects :zf/possible-data-loss?] true))))}))
+
+(rf/reg-event-fx
+ ::ignore-data-loss
+ (fn [{db :db} [_ {:keys [success]}]]
+   (cond-> {:db (assoc-in db [:zf/form :data-loss] :ignored)}
+     success
+     (assoc :dispatch [(:event success) (:params success)]))))
+
+(rf/reg-event-fx
+ :zf/data-saved
+ (fn [{db :db} [_ {:keys [success]}]]
+   (cond-> {:db (assoc-in db [:zf/form :saved?] true)}
+     success
+     (assoc :dispatch [(:event success) (:params success)]))))
