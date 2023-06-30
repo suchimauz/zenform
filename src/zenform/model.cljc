@@ -2,19 +2,44 @@
   (:require [clojure.walk   :as walk]
             [clojure.string :as str]
 
-            [re-frame.db    :as db]
-            [re-frame.core  :as rf]
-            [re-frame.utils :as rfu]
+            [re-frame.db        :as db]
+            [re-frame.core      :as rf]
+            [re-frame.utils     :as rfu]
+            [re-frame.registrar :as registrar]
 
             [zenform.validators :as validators]))
+
+(def ^:private form-change-fx 
+  "Stores the `id` of current handler"
+  (atom nil))
+
+(defn reg-form-change-fx
+  "Regs fx that will be called when form value changes.
+   
+   There can be only one fx at a time."
+  [id handler]
+  (when @form-change-fx
+    (registrar/clear-handlers :fx @form-change-fx))
+  (reset! form-change-fx id)
+  (rf/reg-fx id handler))
+
+(rf/reg-fx
+ ::value-changed
+ (fn [_]
+   (update @db/app-db [:zf/form]
+           merge {:changed? true
+                  :saved?   false})))
 
 (def value-changed
   (rf/->interceptor
    {:id    ::value-changed
     :after (fn [ctx]
-             (update-in ctx [:effects :db :zf/form] merge
-                        {:changed? true
-                         :saved?   false}))}))
+             (cond-> ctx
+               :always
+               (assoc-in [:effects ::value-changed] nil)
+
+               @form-change-fx
+               (assoc-in [:effects @form-change-fx] nil)))}))
 
 (defn *form [{:keys [type default] :as sch} path val]
   (let [v (cond
