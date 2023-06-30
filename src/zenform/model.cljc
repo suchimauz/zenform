@@ -26,9 +26,9 @@
 (rf/reg-fx
  ::value-changed
  (fn [_]
-   (update @db/app-db [:zf/form]
-           merge {:changed? true
-                  :saved?   false})))
+   (swap! db/app-db update :zf/form
+          merge {:changed? true
+                 :saved?   false})))
 
 (def value-changed
   (rf/->interceptor
