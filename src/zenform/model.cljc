@@ -32,14 +32,14 @@
 
 (def value-changed
   (rf/->interceptor
-   {:id    ::value-changed
-    :after (fn [ctx]
-             (cond-> ctx
-               :always
-               (assoc-in [:effects ::value-changed] nil)
+   :id    ::value-changed
+   :after (fn [ctx]
+            (cond-> ctx
+              :always
+              (assoc-in [:effects ::value-changed] nil)
 
-               @form-change-fx
-               (assoc-in [:effects @form-change-fx] nil)))}))
+              @form-change-fx
+              (assoc-in [:effects @form-change-fx] nil)))))
 
 (defn *form [{:keys [type default] :as sch} path val]
   (let [v (cond
@@ -530,12 +530,12 @@
 
 (def before-transition
   (rf/->interceptor
-   {:id     :before-transition
-    :before (fn [ctx]
-              (let [{:keys [changed? saved? data-loss]} (get-in ctx [:coeffects :db :zf/form])]
-                (cond-> ctx
-                  (and changed? (not saved?) (not (#{:ignored} data-loss)))
-                  (assoc-in [:coeffects :zf/possible-data-loss?] true))))}))
+   :id     :before-transition
+   :before (fn [ctx]
+             (let [{:keys [changed? saved? data-loss]} (get-in ctx [:coeffects :db :zf/form])]
+               (cond-> ctx
+                 (and changed? (not saved?) (not (#{:ignored} data-loss)))
+                 (assoc-in [:coeffects :zf/possible-data-loss?] true))))))
 
 (rf/reg-event-fx
  ::ignore-data-loss
