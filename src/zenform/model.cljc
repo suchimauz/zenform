@@ -14,7 +14,7 @@
   (atom nil))
 
 (defn reg-form-change-fx
-  "Regs fx that will be called when form value changes.
+  "Registers fx that will be called when form value changes.
    
    There can be only one fx at a time."
   [id handler]
@@ -31,6 +31,7 @@
                  :saved?   false})))
 
 (def value-changed
+  "Assocs `::value-changed` and current `reg-form-change-fx` into effects."
   (rf/->interceptor
    :id    ::value-changed
    :after (fn [ctx]
@@ -529,6 +530,7 @@
 
 
 (def before-transition
+  "Calculates possible data loss and assocs it in coeffects."
   (rf/->interceptor
    :id     :before-transition
    :before (fn [ctx]
