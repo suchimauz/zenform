@@ -102,6 +102,8 @@
 
 (defn get-value
   "Get value for specific path; if path not passed returns form value."
+  ([db form-path path]
+   (-> db (get-in form-path) (get-value path)))
   ([form path]
    (*get-value (get-in form (get-node-path path))))
   ([form]
