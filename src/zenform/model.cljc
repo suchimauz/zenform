@@ -340,7 +340,7 @@
                         :when file]
                     file))
           node (cond-> node
-                 :always
+                 (map? node)
                  (assoc :touched true)
 
                  errs
