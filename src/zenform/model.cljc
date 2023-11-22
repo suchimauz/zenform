@@ -4,43 +4,44 @@
 
             [re-frame.db        :as db]
             [re-frame.core      :as rf]
-            [re-frame.utils     :as rfu]
-            [re-frame.registrar :as registrar]
 
             [zenform.validators :as validators]))
 
-(def ^:private form-change-fx 
-  "Stores the `id` of current handler"
-  (atom nil))
+(def ^:private form-change-atom
+  "Stores the `id` of current handler and checking function
+   
+   This atom is needed for save independence of zenform from main app"
+  (atom {:fx-id    nil
+         :check-fn nil}))
 
 (defn reg-form-change-fx
   "Registers fx that will be called when form value changes.
    
    There can be only one fx at a time."
   [id handler]
-  (when @form-change-fx
-    (registrar/clear-handlers :fx @form-change-fx))
-  (reset! form-change-fx id)
+  (swap! form-change-atom assoc :fx-id id)
   (rf/reg-fx id handler))
+
+(defn reg-checking-fn
+  "Add function that will check needs to prevent data loss"
+  [func]
+  (swap! form-change-atom assoc :check-fn func))
 
 (rf/reg-fx
  ::value-changed
- (fn [_]
-   (swap! db/app-db update :zf/form
-          merge {:changed? true
-                 :saved?   false})))
+ (fn [form-path]
+   (when (or (not (:check-fn @form-change-atom))
+             ((:check-fn @form-change-atom) form-path))
+     (swap! db/app-db update-in form-path
+            merge {:changed? true
+                   :saved?   false}))))
 
-(def value-changed
-  "Assocs `::value-changed` and current `reg-form-change-fx` into effects."
-  (rf/->interceptor
-   :id    ::value-changed
-   :after (fn [ctx]
-            (cond-> ctx
-              :always
-              (assoc-in [:effects ::value-changed] nil)
-
-              @form-change-fx
-              (assoc-in [:effects @form-change-fx] nil)))))
+(rf/reg-event-fx
+ ::value-changed
+ (fn [_ [_ form-path]]
+   (cond-> {::value-changed form-path}
+     (:fx-id @form-change-atom)
+     (assoc (:fx-id @form-change-atom) form-path))))
 
 (defn *form [{:keys [type default] :as sch} path val]
   (let [v (cond
@@ -365,45 +366,49 @@
 
 (rf/reg-event-fx
  :zf/set-value
- [value-changed]
- (fn [{db :db} [_ form-path path v & [{:keys [success]}]]]
+ (fn [{db :db} [_ form-path path v & [{:keys [success init?]}]]]
    (cond-> {:db (update-in db form-path (fn [form]
-                                          (set-value form form-path path v)))}
+                                          (set-value form form-path path v)))
+            :fx []}
+     
+     (not init?)
+     (update :fx conj [:dispatch [::value-changed form-path]])
+
      success
-     (assoc :dispatch [(:event success) (:params success)]))))
+     (update :fx conj [:dispatch [(:event success) (:params success)]]))))
 
 (rf/reg-event-fx
  :zf/update-value
- [value-changed]
  (fn [{db :db} [_ form-path path f & [{:keys [success]}]]]
    (cond-> {:db (update-in db form-path
                            (fn [form]
                              (let [v  (get-value form path)
                                    v' (f v)]
-                               (set-value form form-path path v'))))}
+                               (set-value form form-path path v'))))
+            :fx [[:dispatch [::value-changed form-path]]]}
      success
-     (assoc :dispatch [(:event success) (:params success)]))))
+     (update :fx conj [:dispatch [(:event success) (:params success)]]))))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/clear-value
- [value-changed]
- (fn [db [_ form-path path]]
+ (fn [{db :db} [_ form-path path]]
    (let [path* (get-value-path path)]
-     (assoc-in db (into form-path path*) nil))))
+     {:db (assoc-in db (into form-path path*) nil)
+      :dispatch [::value-changed form-path]})))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/set-values
- [value-changed]
- (fn [db [_ form-path path vs]]
-   (update-in db form-path
-              (fn [form]
-                (reduce-kv
-                 (fn [acc k v]
-                   (set-value acc form-path
-                              (into path (cond-> k (keyword? k) (vector)))
-                              v))
-                 form
-                 vs)))))
+ (fn [{db :db} [_ form-path path vs]]
+   {:db  (update-in db form-path
+                    (fn [form]
+                      (reduce-kv
+                       (fn [acc k v]
+                         (set-value acc form-path
+                                    (into path (cond-> k (keyword? k) (vector)))
+                                    v))
+                       form
+                       vs)))
+    :dispatch [::value-changed form-path]}))
 
 (rf/reg-sub
  :zf/collection-indexes
@@ -476,29 +481,29 @@
     (-> (*set-value form-data form-path path value :collection)
         (*on-value-set-loop form-path (butlast path)))))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/add-collection-item
- [value-changed]
- (fn [db [_ form-path path v]]
-   (update-in db form-path (fn [form] (add-collection-item form form-path path v)))))
+ (fn [{db :db} [_ form-path path v]]
+   {:db (update-in db form-path (fn [form] (add-collection-item form form-path path v)))
+    :dispatch [::value-changed form-path]}))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/remove-collection-item
- [value-changed]
- (fn [db [_ form-path path idx]]
-   (update-in db form-path (fn [form] (remove-collection-item form path idx form-path)))))
+ (fn [{db :db} [_ form-path path idx]]
+   {:db (update-in db form-path (fn [form] (remove-collection-item form path idx form-path)))
+    :dispatch [::value-changed form-path]}))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/set-collection
- [value-changed]
- (fn [db [_ form-path path v]]
-   (update-in db form-path (fn [form] (set-collection form path v)))))
+ (fn [{db :db} [_ form-path path v]]
+   {:db (update-in db form-path (fn [form] (set-collection form path v)))
+    :dispatch [::value-changed form-path]}))
 
-(rf/reg-event-db
+(rf/reg-event-fx
  :zf/set-collection-item
- [value-changed]
- (fn [db [_ form-path path v]]
-   (update-in db form-path (fn [form-data] (set-collection-item form-data form-path path v)))))
+ (fn [{db :db} [_ form-path path v]]
+   {:db (update-in db form-path (fn [form-data] (set-collection-item form-data form-path path v)))
+    :dispatch [::value-changed form-path]}))
 
 (rf/reg-sub
  :zf/collection
@@ -525,32 +530,41 @@
                    (get-full-path form-path path)
                    #(dissoc % :validators))}))
 
-(rf/reg-event-db
- ::reset
- (fn [db _]
-   (rfu/dissoc-in db [:zf/form])))
-
 
 (def before-transition
   "Calculates possible data loss and assocs it in coeffects."
   (rf/->interceptor
    :id     :before-transition
    :before (fn [ctx]
-             (let [{:keys [changed? saved? data-loss]} (get-in ctx [:coeffects :db :zf/form])]
+             (let [{:form/keys [prevent-data-loss?]}
+                   (last (get-in ctx [:coeffects :db :route-map/current-route :parents]))
+                   
+                   forms (get-in ctx [:coeffects :db :form])]
                (cond-> ctx
-                 (and changed? (not saved?) (not (#{:ignored} data-loss)))
+                 (some (fn [[_ {:keys [changed? saved? data-loss dialog?]}]]
+                         (and changed? (not saved?) (not (#{:ignored} data-loss))
+                              (or prevent-data-loss?
+                                  dialog?)))
+                       forms)
                  (assoc-in [:coeffects :zf/possible-data-loss?] true))))))
 
 (rf/reg-event-fx
  ::ignore-data-loss
  (fn [{db :db} [_ {:keys [success]}]]
-   (cond-> {:db (assoc-in db [:zf/form :data-loss] :ignored)}
+   (cond-> {:db (update db :form (partial reduce-kv
+                                          (fn [acc k v]
+                                            (assoc acc k 
+                                                   (assoc v :data-loss :ignored)))
+                                          {}))}
      success
      (assoc :dispatch [(:event success) (:params success)]))))
 
 (rf/reg-event-fx
  :zf/data-saved
- (fn [{db :db} [_ {:keys [success]}]]
-   (cond-> {:db (assoc-in db [:zf/form :saved?] true)}
+ (fn [{db :db} [_ {:keys [success form-pathes]}]]
+   (cond-> {:db (reduce (fn [db form-path]
+                          (update-in db form-path assoc :saved? true))
+                        db
+                        form-pathes)}
      success
      (assoc :dispatch [(:event success) (:params success)]))))
