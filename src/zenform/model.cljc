@@ -65,6 +65,10 @@
                           (conj path i)
                           *val)]))
                    v))
+
+      (= type :boolean)
+      (assoc sch :value (boolean v))
+
       type
       (assoc sch :value v)
 
@@ -119,6 +123,11 @@
   ([form-path]
    (get-value (get-in @db/app-db form-path))))
 
+(defn get-form-node
+  [db form-path path]
+  (-> db
+      (get-in form-path)
+      (get-in (get-node-path path))))
 
 (defn validate-node [node value & [path]]
   (reduce (fn [errs [k cfg]]
@@ -421,9 +430,7 @@
 (rf/reg-sub
  :zf/node
  (fn [db [_ form-path path]]
-   (-> db
-       (get-in form-path)
-       (get-in (get-node-path path)))))
+   (get-form-node db form-path path)))
 
 (rf/reg-sub
  :zf/form
