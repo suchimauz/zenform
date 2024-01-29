@@ -124,10 +124,12 @@
    (get-value (get-in @db/app-db form-path))))
 
 (defn get-form-node
-  [db form-path path]
-  (-> db
-      (get-in form-path)
-      (get-in (get-node-path path))))
+  ([form-data path]
+   (get-in form-data (get-node-path path)))
+  ([db form-path path]
+   (-> db
+       (get-in form-path)
+       (get-in (get-node-path path)))))
 
 (defn validate-node [node value & [path]]
   (reduce (fn [errs [k cfg]]
@@ -529,6 +531,15 @@
    {:db (update-in db
                    (get-full-path form-path path)
                    #(merge % value))}))
+
+(rf/reg-event-fx
+ :zf/update-nodes-in-schema
+ (fn [{db :db} [_ form-path payload]]
+   {:db (reduce
+         (fn [acc [path value]]
+           (update-in acc (get-full-path form-path path) #(merge % value)))
+         db
+         payload)}))
 
 (rf/reg-event-fx
  :zf/remove-validators
