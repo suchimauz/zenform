@@ -1,6 +1,7 @@
 (ns zenform.inputs.codemirror
   (:require [re-frame.core :as rf]
-            [reagent.core :as r]))
+            [reagent.core :as r]
+            [reagent.dom  :as rdom]))
 
 (def Doc (when (exists? js/CodeMirror)
            (.-Doc js/CodeMirror)))
@@ -266,7 +267,7 @@
 
       :component-did-mount
       (fn [this]
-        (let [*cm (codemirror (r/dom-node this) cm-opts)
+        (let [*cm (codemirror (rdom/dom-node this) cm-opts)
               sv (aget *cm "setValue")
               gv (aget *cm "getValue")
               on (aget *cm "on")]
