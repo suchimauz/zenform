@@ -17,6 +17,17 @@
   (when (or (nil? v) (and (string? v) (str/blank? v)))
     (or msg "Should not be blank")))
 
+(def email-regex #".+?\@.+?\..+")
+
+(defmethod validate
+  :email
+  [{msg :message} v]
+  (when-not (re-matches email-regex v)
+    (or msg "Should be email value")))
+
+;; (defn email [& [opt]]
+;;   (regex email-regex opt))
+
 
 (comment
   (validate {:type :zf/min-length :value 5} "Nic"))
